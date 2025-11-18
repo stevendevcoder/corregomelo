@@ -149,16 +149,23 @@ public class NeroAI : MonoBehaviour
     {
         anim.Play("ataqueNero");
 
+        if (prefabCuchillo == null)
+        {
+            return;
+        }
+
         if (timerCuchillo >= intervaloCuchillo)
         {
             timerCuchillo = 0f;
 
             Vector3 spawn = transform.position + transform.right * 0.5f;
+
             Instantiate(prefabCuchillo, spawn, transform.rotation);
         }
 
         estadoActual = Estado.Perseguir;
     }
+
 
     private void Robar()
     {
