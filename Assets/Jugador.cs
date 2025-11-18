@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using UnityEngine;
 
 public class Jugador : MonoBehaviour
@@ -9,9 +10,19 @@ public class Jugador : MonoBehaviour
     private Rigidbody2D rb;
     private Animator anim;
 
-    private float movimientoX = 0f;
-    private bool enSuelo = false;
+    private float movimientoX;
     private bool saltar = false;
+
+    [Header("Detección de suelo")]
+    [SerializeField] private Transform sensorSuelo;
+    [SerializeField] private float distanciaSuelo = 0.25f;
+
+    // Aquí debes asignar varias layers: Piso + Obstaculos
+    [SerializeField] private LayerMask capasQueCuentanComoSuelo;
+
+    private bool enSuelo;
+    private float tiempoCoyote = 0f;
+    private float coyoteMax = 0.15f; // tiempo de perdón
 
     private void Start()
     {
@@ -21,36 +32,49 @@ public class Jugador : MonoBehaviour
 
     private void Update()
     {
-        // Leer input SOLO aquí
         movimientoX = Input.GetAxisRaw("Horizontal");
 
-        // Registrar salto correctamente (sin perder input)
-        if ((Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow)) && enSuelo)
+        DetectarSuelo();
+
+        // Coyote time
+        if (enSuelo)
+            tiempoCoyote = coyoteMax;
+        else
+            tiempoCoyote -= Time.deltaTime;
+
+        // Input de salto
+        if ((Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow)) && tiempoCoyote > 0)
         {
             saltar = true;
         }
 
-        // Animaciones
         ActualizarAnimaciones();
     }
 
     private void FixedUpdate()
     {
-        // Aplicar movimiento con físicas (evita bugs)
         rb.linearVelocity = new Vector2(movimientoX * velocidad, rb.linearVelocity.y);
 
-        // Saltar si corresponde
         if (saltar)
         {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
             rb.AddForce(Vector2.up * fuerzaSalto, ForceMode2D.Impulse);
-            enSuelo = false;
-            saltar = false;  // evita doble salto bug
+
+            saltar = false;
+            tiempoCoyote = 0;
         }
+    }
+
+    private void DetectarSuelo()
+    {
+        // Detecta suelo, plataformas y obstáculos según el LayerMask
+        enSuelo = Physics2D.Raycast(sensorSuelo.position, Vector2.down, distanciaSuelo, capasQueCuentanComoSuelo);
+
     }
 
     private void ActualizarAnimaciones()
     {
-        if (!enSuelo)
+        if (!enSuelo && tiempoCoyote <= 0)
         {
             anim.Play("salto");
             return;
@@ -60,7 +84,6 @@ public class Jugador : MonoBehaviour
         {
             anim.Play("correr");
 
-            // Flip
             if (movimientoX > 0) transform.localScale = new Vector3(1, 1, 1);
             if (movimientoX < 0) transform.localScale = new Vector3(-1, 1, 1);
 
@@ -68,21 +91,5 @@ public class Jugador : MonoBehaviour
         }
 
         anim.Play("reposo");
-    }
-
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (collision.collider.CompareTag("Piso") || collision.collider.CompareTag("Plataforma"))
-        {
-            enSuelo = true;
-        }
-    }
-
-    private void OnCollisionExit2D(Collision2D collision)
-    {
-        if (collision.collider.CompareTag("Piso") || collision.collider.CompareTag("Plataforma"))
-        {
-            enSuelo = false;
-        }
     }
 }

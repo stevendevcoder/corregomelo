@@ -10,30 +10,33 @@ public class NeroAI : MonoBehaviour
     [SerializeField] private Transform jugador;
     private Rigidbody2D rb;
     private Animator anim;
+    private bool hacerSalto = false;
 
     [Header("Movimiento")]
     [SerializeField] private float velocidad = 3f;
     [SerializeField] private float fuerzaSalto = 7f;
 
-    [Header("Raycasts de Detección")]
+    [Header("Detección")]
     [SerializeField] private Transform detectorFrente;
     [SerializeField] private Transform detectorSuelo;
-    [SerializeField] private float distanciaRaycast = 0.5f;
-    [SerializeField] private LayerMask capaObstaculos;
+    [SerializeField] private float distanciaRaycast = 1.3f;
+    [SerializeField] private LayerMask capaObstaculos;   // plataformas, cajas, etc.
+    [SerializeField] private LayerMask capaSuelo;        // piso donde puede pararse
+
+    private bool enSuelo = false;
 
     [Header("Ataque")]
     [SerializeField] private float distanciaAtaque = 4f;
     [SerializeField] private float distanciaRobar = 1f;
     [SerializeField] private GameObject prefabCuchillo;
-    [SerializeField] private float intervaloCuchillo = 2f;
+    [SerializeField] private float intervaloCuchillo = 0.5f;
     private float timerCuchillo = 0f;
-
-    private bool enSuelo = false;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
+        estadoActual = Estado.Perseguir;
     }
 
     private void Update()
@@ -41,50 +44,59 @@ public class NeroAI : MonoBehaviour
         timerCuchillo += Time.deltaTime;
 
         DetectarSuelo();
-        DetectarObstaculos();
         ActualizarEstados();
         EjecutarEstado();
     }
 
     private void DetectarSuelo()
     {
-        enSuelo = Physics2D.Raycast(detectorSuelo.position, Vector2.down, 0.2f, capaObstaculos);
+        enSuelo = Physics2D.Raycast(detectorSuelo.position, Vector2.down, 0.2f, capaSuelo);
+
+
     }
 
-    private bool DetectarObstaculos()
+    private bool DetectarObstaculoFrente()
     {
-        // Detecta frente del ñero
-        RaycastHit2D hit = Physics2D.Raycast(detectorFrente.position, transform.right, distanciaRaycast, capaObstaculos);
+        // derecha o izquierda según el flip
+        Vector2 direccion = Vector2.right * Mathf.Sign(transform.localScale.x);
 
-        return hit.collider != null; // True si hay obstáculo
+        RaycastHit2D hit = Physics2D.Raycast(
+            detectorFrente.position,
+            direccion,
+            distanciaRaycast,
+            capaObstaculos
+        );
+
+
+        return hit.collider != null;
     }
 
     private void ActualizarEstados()
     {
         float dist = Vector2.Distance(transform.position, jugador.position);
 
-        // 1. Si está MUY cerca → robar (game over)
+        // 1. Robo (cuando ya lo alcanzó)
         if (dist <= distanciaRobar)
         {
             estadoActual = Estado.Robar;
             return;
         }
 
-        // 2. Si está cerca → lanzar cuchillo
+        // 2. Ataque a distancia
         if (dist <= distanciaAtaque)
         {
             estadoActual = Estado.Atacar;
             return;
         }
 
-        // 3. Si hay obstáculo y está en suelo → saltar
-        if (DetectarObstaculos() && enSuelo)
+        // 3. Saltar si hay obstáculo y está en el suelo
+        if (DetectarObstaculoFrente() && enSuelo)
         {
             estadoActual = Estado.Saltar;
             return;
         }
 
-        // 4. Caso base → perseguir
+        // 4. Por defecto: perseguir
         estadoActual = Estado.Perseguir;
     }
 
@@ -115,9 +127,9 @@ public class NeroAI : MonoBehaviour
         anim.Play("correrNero");
 
         Vector2 dir = (jugador.position - transform.position).normalized;
-
         rb.linearVelocity = new Vector2(dir.x * velocidad, rb.linearVelocity.y);
 
+        // Flip hacia el jugador
         if (dir.x > 0) transform.localScale = new Vector3(1, 1, 1);
         else if (dir.x < 0) transform.localScale = new Vector3(-1, 1, 1);
     }
@@ -126,11 +138,12 @@ public class NeroAI : MonoBehaviour
     {
         anim.Play("saltoNero");
 
-        rb.AddForce(Vector2.up * fuerzaSalto, ForceMode2D.Impulse);
+        if (enSuelo)
+            hacerSalto = true;  // solo marcamos que debe saltar
 
-        // Volver automáticamente a perseguir
         estadoActual = Estado.Perseguir;
     }
+
 
     private void LanzarCuchillo()
     {
@@ -140,30 +153,25 @@ public class NeroAI : MonoBehaviour
         {
             timerCuchillo = 0f;
 
-            Vector3 puntoSpawn = transform.position + transform.right * 0.5f;
-
-            GameObject cuchillo = Instantiate(prefabCuchillo, puntoSpawn, transform.rotation);
+            Vector3 spawn = transform.position + transform.right * 0.5f;
+            Instantiate(prefabCuchillo, spawn, transform.rotation);
         }
 
-        // Después de atacar vuelve a perseguir
         estadoActual = Estado.Perseguir;
     }
 
     private void Robar()
     {
         anim.Play("robarNero");
-
         rb.linearVelocity = Vector2.zero;
-
-
     }
 
-    private void OnDrawGizmosSelected()
+    private void FixedUpdate()
     {
-        if (detectorFrente != null)
-            Gizmos.DrawLine(detectorFrente.position, detectorFrente.position + transform.right * distanciaRaycast);
-
-        if (detectorSuelo != null)
-            Gizmos.DrawLine(detectorSuelo.position, detectorSuelo.position + Vector3.down * 0.2f);
+        if (hacerSalto)
+        {
+            rb.AddForce(Vector2.up * fuerzaSalto, ForceMode2D.Impulse);
+            hacerSalto = false;
+        }
     }
 }

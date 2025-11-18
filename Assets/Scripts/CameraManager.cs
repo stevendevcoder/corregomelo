@@ -10,7 +10,7 @@ public class CameraManager : MonoBehaviour
     {
         if (objetivo == null) return;
 
-        Vector3 posicionDeseada = new Vector3(objetivo.position.x, objetivo.position.y, transform.position.z);
+        Vector3 posicionDeseada = new Vector3(objetivo.position.x, objetivo.position.y+1f, transform.position.z);
         transform.position = Vector3.SmoothDamp(transform.position, posicionDeseada, ref velocidad, suavizado);
     }
 }
