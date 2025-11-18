@@ -2,57 +2,87 @@ using UnityEngine;
 
 public class Jugador : MonoBehaviour
 {
-    [SerializeField] private bool isNero = false; 
-    [SerializeField] private float speed = 2f;
-    [SerializeField] private float jumpForce = 5f;
-    [SerializeField] private float cambioCada = 3f; 
+    [Header("Movimiento")]
+    [SerializeField] private float velocidad = 5f;
+    [SerializeField] private float fuerzaSalto = 10f;
 
-    private Animator anim;
     private Rigidbody2D rb;
+    private Animator anim;
 
-    private float timer = 0f;
-    private int estado = 0; 
+    private float movimientoX = 0f;
+    private bool enSuelo = false;
+    private bool saltar = false;
 
     private void Start()
     {
-        anim = GetComponent<Animator>();
         rb = GetComponent<Rigidbody2D>();
+        anim = GetComponent<Animator>();
     }
 
     private void Update()
     {
-        timer += Time.deltaTime;
+        // Leer input SOLO aquí
+        movimientoX = Input.GetAxisRaw("Horizontal");
 
-        if (timer >= cambioCada)
+        // Registrar salto correctamente (sin perder input)
+        if ((Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow)) && enSuelo)
         {
-            estado = (estado + 1) % 4; // 0→1→2→3→0
-            timer = 0f;
+            saltar = true;
         }
 
-        switch (estado)
+        // Animaciones
+        ActualizarAnimaciones();
+    }
+
+    private void FixedUpdate()
+    {
+        // Aplicar movimiento con físicas (evita bugs)
+        rb.linearVelocity = new Vector2(movimientoX * velocidad, rb.linearVelocity.y);
+
+        // Saltar si corresponde
+        if (saltar)
         {
-            case 0: // Reposo
-                anim.Play(isNero ? "reposoNero" : "reposo");
-                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-                break;
+            rb.AddForce(Vector2.up * fuerzaSalto, ForceMode2D.Impulse);
+            enSuelo = false;
+            saltar = false;  // evita doble salto bug
+        }
+    }
 
-            case 1: // Correr izquierda
-                anim.Play(isNero ? "correrNero" : "correr");
-                transform.localScale = new Vector3(-1, 1, 1);
-                rb.linearVelocity = new Vector2(-speed, rb.linearVelocity.y);
-                break;
+    private void ActualizarAnimaciones()
+    {
+        if (!enSuelo)
+        {
+            anim.Play("salto");
+            return;
+        }
 
-            case 2: // Correr derecha
-                anim.Play(isNero ? "correrNero" : "correr");
-                transform.localScale = new Vector3(1, 1, 1);
-                rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);
-                break;
+        if (Mathf.Abs(movimientoX) > 0.1f)
+        {
+            anim.Play("correr");
 
-            case 3: // Saltar
-                anim.Play(isNero ? "saltoNero" : "salto");
-                if (Mathf.Abs(rb.linearVelocity.y) < 0.01f)
-                    rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-                break;
+            // Flip
+            if (movimientoX > 0) transform.localScale = new Vector3(1, 1, 1);
+            if (movimientoX < 0) transform.localScale = new Vector3(-1, 1, 1);
+
+            return;
+        }
+
+        anim.Play("reposo");
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.collider.CompareTag("Piso") || collision.collider.CompareTag("Plataforma"))
+        {
+            enSuelo = true;
+        }
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.collider.CompareTag("Piso") || collision.collider.CompareTag("Plataforma"))
+        {
+            enSuelo = false;
         }
     }
 }
